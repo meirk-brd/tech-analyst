@@ -146,56 +146,9 @@ Access the application at `http://localhost:3000/market-analyst`
 
 Tech Analyst uses a **LangGraph state machine** to orchestrate a 5-stage analysis pipeline:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        User Input                                │
-│                    "AI Code Assistants"                         │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  1. DISCOVERY                                                    │
-│  ├─ Generate search queries via AI                              │
-│  ├─ Execute searches via Bright Data                            │
-│  ├─ Extract company leads from results                          │
-│  └─ Deduplicate to ~30 unique companies                         │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  2. ENRICHMENT                                                   │
-│  ├─ Validate company information                                │
-│  └─ Enrich with additional metadata                             │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  3. EXTRACTION                                                   │
-│  ├─ Scrape pricing pages, docs, about sections                  │
-│  ├─ Concurrent processing (max 90 jobs)                         │
-│  ├─ Cache results in MongoDB (7-day TTL)                        │
-│  └─ AI reflection on extracted content                          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  4. SYNTHESIS                                                    │
-│  ├─ Calculate multi-factor scores                               │
-│  │   ├─ Feature Depth (10-100)                                  │
-│  │   ├─ Innovation (40-95)                                      │
-│  │   ├─ Positioning (45-80)                                     │
-│  │   └─ Pricing Maturity (20-80)                                │
-│  └─ Generate CSV export                                         │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  5. VISUALIZATION                                                │
-│  ├─ Gartner Magic Quadrant                                      │
-│  ├─ Forrester Wave                                              │
-│  └─ GigaOm Radar                                                │
-└─────────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="./assets/full-analysis-graph.png" width="200"/>
+</p>
 
 ### Project Structure
 
