@@ -1,0 +1,177 @@
+import "server-only";
+
+import { Annotation, END, MemorySaver, START, StateGraph } from "@langchain/langgraph";
+
+import { runDiscovery } from "./discovery";
+import { getEnrichmentApp } from "@/lib/agents/enrichment/enrichment-graph";
+import { getExtractionApp } from "@/lib/agents/extraction/extraction-graph";
+import { getExtractionMaxConcurrency } from "@/lib/agents/extraction/concurrency";
+import { calculateScores } from "@/lib/agents/synthesis/scoring";
+import { generateCsv } from "@/lib/agents/synthesis/csv";
+import { generateChartData } from "@/lib/agents/visualization/generate-chart-data";
+// Legacy AI-based image generation (kept for fallback)
+import {
+  buildForresterWavePrompt,
+  buildGigaOmRadarPrompt,
+  buildMagicQuadrantPrompt,
+} from "@/lib/agents/visualization/prompts";
+import { generateImage } from "@/lib/agents/visualization/generate-image";
+import type { AnalysisStatus, CompanyLead, Visualizations } from "./types";
+import type { ExtractedCompanyData } from "@/lib/agents/extraction/types";
+import type { ScoredCompany } from "@/lib/agents/synthesis/types";
+import type { ImageResult } from "@/lib/agents/visualization/types";
+import { logOrchestration } from "./logger";
+
+// Feature flag for Recharts-based visualization (default on; set USE_RECHARTS=false to use AI)
+const USE_RECHARTS = process.env.USE_RECHARTS !== "false" && process.env.USE_RECHARTS !== "0";
+
+const AnalysisState = Annotation.Root({
+  marketSector: Annotation<string>(),
+  companies: Annotation<CompanyLead[]>(),
+  extractedData: Annotation<ExtractedCompanyData[]>({
+    reducer: (left, right) => [...(left || []), ...(right || [])],
+    default: () => [],
+  }),
+  scores: Annotation<ScoredCompany[]>(),
+  csv: Annotation<string>(),
+  visualizations: Annotation<Visualizations>(),
+  status: Annotation<AnalysisStatus>(),
+  error: Annotation<string | undefined>(),
+});
+
+async function discoveryNode(state: typeof AnalysisState.State) {
+  logOrchestration("discovery.start", { marketSector: state.marketSector });
+  const result = await runDiscovery(state.marketSector);
+  logOrchestration("discovery.done", { companies: result.companies.length });
+  return {
+    companies: result.companies,
+    status: "enrichment" as const,
+  };
+}
+
+async function enrichmentNode(state: typeof AnalysisState.State) {
+  logOrchestration("enrichment.start", { leads: state.companies.length });
+  const enrichmentApp = getEnrichmentApp();
+  const result = await enrichmentApp.invoke({
+    marketSector: state.marketSector,
+    leads: state.companies,
+  });
+  logOrchestration("enrichment.done", {
+    input: state.companies.length,
+    output: result.enrichedCompanies.length,
+    stats: result.stats,
+  });
+  return {
+    companies: result.enrichedCompanies,
+    status: "extraction" as const,
+  };
+}
+
+async function extractionNode(state: typeof AnalysisState.State) {
+  logOrchestration("extraction.start", { companies: state.companies.length });
+  const extractionApp = getExtractionApp();
+  const result = await extractionApp.invoke(
+    { companies: state.companies, status: "pending" },
+    {
+      configurable: {
+        thread_id: crypto.randomUUID(),
+        max_concurrency: getExtractionMaxConcurrency(),
+      },
+    }
+  );
+  logOrchestration("extraction.done", { extracted: result.extractedData.length });
+  return {
+    extractedData: result.extractedData,
+    status: "synthesis" as const,
+  };
+}
+
+function synthesisNode(state: typeof AnalysisState.State) {
+  logOrchestration("synthesis.start", { extracted: state.extractedData.length });
+  const scores = calculateScores(state.extractedData, { normalize: true });
+  const csv = generateCsv(scores);
+  logOrchestration("synthesis.done", { scored: scores.length });
+  return {
+    scores,
+    csv,
+    status: "visualization" as const,
+  };
+}
+
+async function visualizationNode(state: typeof AnalysisState.State) {
+  logOrchestration("visualization.start", { scores: state.scores.length, useRecharts: USE_RECHARTS });
+  const payload = state.scores.map((score) => ({
+    company: score.company,
+    vision: score.vision,
+    execution: score.execution,
+    quadrant: score.quadrant,
+  }));
+
+  if (USE_RECHARTS) {
+    // New: Generate chart data for client-side rendering
+    const chartData = generateChartData(payload, {
+      quadrantTitle: `Magic Quadrant for ${state.marketSector}`,
+      waveSubtitle: state.marketSector,
+      radarCategory: state.marketSector,
+    });
+
+    // Create placeholder ImageResults - client will render and replace with actual PNGs
+    const placeholderImage: ImageResult = {
+      mimeType: "image/png",
+      base64: "",
+      dataUrl: "",
+    };
+
+    logOrchestration("visualization.done", { mode: "recharts", charts: 3 });
+    return {
+      visualizations: {
+        quadrant: placeholderImage,
+        wave: placeholderImage,
+        radar: placeholderImage,
+        chartData,
+      } satisfies Visualizations,
+      status: "completed" as const,
+    };
+  }
+
+  // Legacy: AI-based image generation
+  const quadrantPrompt = buildMagicQuadrantPrompt(payload);
+  const wavePrompt = buildForresterWavePrompt(payload);
+  const radarPrompt = buildGigaOmRadarPrompt(payload);
+
+  const [quadrant, wave, radar] = await Promise.all([
+    generateImage(quadrantPrompt),
+    generateImage(wavePrompt),
+    generateImage(radarPrompt),
+  ]);
+
+  logOrchestration("visualization.done", { mode: "ai", images: 3 });
+  return {
+    visualizations: { quadrant, wave, radar },
+    status: "completed" as const,
+  };
+}
+
+const workflow = new StateGraph(AnalysisState)
+  .addNode("discovery", discoveryNode)
+  .addNode("enrichment", enrichmentNode)
+  .addNode("extraction", extractionNode)
+  .addNode("synthesis", synthesisNode)
+  .addNode("visualization", visualizationNode)
+  .addEdge(START, "discovery")
+  .addEdge("discovery", "enrichment")
+  .addEdge("enrichment", "extraction")
+  .addEdge("extraction", "synthesis")
+  .addEdge("synthesis", "visualization")
+  .addEdge("visualization", END);
+
+const checkpointer = new MemorySaver();
+
+let cachedApp: ReturnType<typeof workflow.compile> | null = null;
+
+export function getAnalysisApp() {
+  if (!cachedApp) {
+    cachedApp = workflow.compile({ checkpointer });
+  }
+  return cachedApp;
+}
