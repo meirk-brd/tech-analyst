@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAnalysisApp } from "@/lib/agents/orchestration/analysis-graph";
 import { parseMarketSector } from "@/lib/agents/orchestration/parse-input";
+import { createProgressEmitter, clearProgressEmitter } from "@/lib/agents/orchestration/progress";
 import type { Visualizations } from "@/lib/agents/orchestration/types";
 import { createSession, updateSession } from "@/lib/db/mongodb";
 import { getRateLimitInfo, getClientIP } from "@/lib/rate-limiter";
@@ -118,6 +119,20 @@ export async function POST(request: Request) {
         );
       };
 
+      // Set up progress emitter to forward granular events to SSE
+      const progressEmitter = createProgressEmitter();
+      progressEmitter.setCallback((event) => {
+        send({
+          type: "progress",
+          stage: event.stage,
+          substage: event.substage,
+          message: event.message,
+          progress: event.progress,
+          total: event.total,
+          company: event.company,
+        });
+      });
+
       try {
         // Send session ID in the first event
         send({ type: "session", sessionId });
@@ -129,19 +144,27 @@ export async function POST(request: Request) {
           const nodeName = Object.keys(event)[0] as keyof typeof event;
           const nodeOutput = event[nodeName];
 
+          // Send stage completion events (these mark the transition to the next stage)
           if (nodeName === "discovery") {
             const discovery = nodeOutput as { companies?: unknown[] };
             send({
               type: "progress",
               stage: "discovery",
-              message: `Found ${discovery?.companies?.length || 0} companies`,
+              message: `Discovered ${discovery?.companies?.length || 0} potential companies`,
+            });
+          } else if (nodeName === "enrichment") {
+            const enrichment = nodeOutput as { enrichedCompanies?: unknown[] };
+            send({
+              type: "progress",
+              stage: "enrichment",
+              message: `Validated ${enrichment?.enrichedCompanies?.length || 0} companies for analysis`,
             });
           } else if (nodeName === "extraction") {
             const extraction = nodeOutput as { extractedData?: unknown[] };
             send({
               type: "progress",
               stage: "extraction",
-              message: `Extracted ${extraction?.extractedData?.length || 0} companies`,
+              message: `Extracted data from ${extraction?.extractedData?.length || 0} companies`,
             });
           } else if (nodeName === "synthesis") {
             const synthesis = nodeOutput as { scores?: unknown[] };
@@ -197,6 +220,7 @@ export async function POST(request: Request) {
 
         send({ type: "error", error: message, sessionId });
       } finally {
+        clearProgressEmitter();
         controller.close();
       }
     },

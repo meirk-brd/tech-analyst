@@ -8,6 +8,7 @@ type SearchToolOptions = {
   engine?: "google" | "bing" | "yandex";
   pages?: number;
   cursorStart?: number;
+  onProgress?: (completed: number) => void;
 };
 
 export async function runSearchQueries(
@@ -18,6 +19,9 @@ export async function runSearchQueries(
   const engine = options.engine ?? "google";
   const pages = Math.max(1, options.pages ?? 2);
   const cursorStart = options.cursorStart ?? 1;
+  const onProgress = options.onProgress;
+
+  let completedCount = 0;
 
   const tasks = queries.flatMap((query) => {
     return Array.from({ length: pages }, (_, index) => {
@@ -35,10 +39,14 @@ export async function runSearchQueries(
             cursor,
             rawType: typeof raw,
           });
+          completedCount++;
+          onProgress?.(completedCount);
           return { query, cursor, raw };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           logDiscovery("search.error", { query, cursor, error: message });
+          completedCount++;
+          onProgress?.(completedCount);
           return { query, cursor, error: message };
         }
       })();

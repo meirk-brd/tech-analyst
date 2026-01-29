@@ -55,12 +55,22 @@ export function AgentLogs({
           className="p-4 space-y-1 max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
         >
           {logs.length === 0 ? (
-            <p className="text-white/40 text-sm font-mono">
-              Waiting for analysis to start...
-            </p>
+            <div className="space-y-1">
+              <p className="text-white/40 text-sm font-mono flex items-center gap-2">
+                <span className="w-2 h-2 bg-white/30 rounded-full animate-pulse" />
+                Connecting to analysis pipeline...
+              </p>
+            </div>
           ) : (
             logs.map((log) => (
-              <LogEntry key={log.id} type={log.type} message={log.message} />
+              <LogEntry
+                key={log.id}
+                type={log.type}
+                message={log.message}
+                progress={log.progress}
+                total={log.total}
+                company={log.company}
+              />
             ))
           )}
         </div>

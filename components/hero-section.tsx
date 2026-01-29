@@ -18,13 +18,12 @@ export function HeroSection({ children }: HeroSectionProps) {
 
       {/* Title */}
       <h1 className="text-5xl md:text-6xl font-bold text-white mb-4">
-        Market Intelligence
+        Market Landscape Agent
       </h1>
 
       {/* Subtitle */}
       <p className="text-white/60 text-center max-w-2xl mx-auto mb-12 text-lg">
-        Generate Magic Quadrants, Waves, and Radars for
-        any market sector in seconds using AI-powered analysis.
+      Discover 100+ sources and ingest live web data to reveal how an AI perceives a market category. The agent analyzes this public evidence to construct a ground-truth competitive landscape, translating its findings into interactive Quadrants and Radars based entirely on real-time data.
       </p>
 
       {/* Search area - passed as children */}

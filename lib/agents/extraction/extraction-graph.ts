@@ -4,6 +4,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { Annotation, Send, StateGraph } from "@langchain/langgraph";
 
 import { getBrightDataTool } from "@/lib/mcp/bright-data";
+import { getProgressEmitter } from "@/lib/agents/orchestration/progress";
 import { detectPaths } from "./detect-paths";
 import { scrapePath } from "./scrape-path";
 import { reflectOnScrapedPages } from "./reflect-extraction";
@@ -23,8 +24,24 @@ type CompanyExtractionState = {
   company: CompanyInput;
 };
 
+// Track extraction progress globally for this request
+let extractionProgress = { completed: 0, total: 0 };
+
 function fanOutExtraction(state: typeof ExtractionState.State): Send[] {
   logExtraction("fanout", { companies: state.companies.length });
+
+  // Initialize progress tracking
+  extractionProgress = { completed: 0, total: state.companies.length };
+
+  const emitter = getProgressEmitter();
+  emitter?.emit({
+    stage: "extraction",
+    substage: "extracting",
+    message: `Extracting data from ${state.companies.length} companies...`,
+    progress: 0,
+    total: state.companies.length,
+  });
+
   return state.companies.map((company) => new Send("extractSingleCompany", { company }));
 }
 
@@ -32,15 +49,27 @@ async function extractSingleCompany(
   state: CompanyExtractionState
 ): Promise<{ extractedData: ExtractedCompanyData[] }> {
   const { company } = state;
+  const emitter = getProgressEmitter();
+
   logExtraction("company.start", { company: company.name });
+
+  // Emit progress for this company
+  emitter?.emit({
+    stage: "extraction",
+    substage: "extracting",
+    message: `Extracting ${company.name}...`,
+    company: company.name,
+    progress: extractionProgress.completed,
+    total: extractionProgress.total,
+  });
 
   const scrapeTool = await getBrightDataTool("scrape_as_markdown");
   const paths = detectPaths(company.url);
 
   const [pricing, docs, about] = await Promise.all([
-    scrapePath("pricing", paths.pricing, scrapeTool),
-    scrapePath("docs", paths.docs, scrapeTool),
-    scrapePath("about", paths.about, scrapeTool),
+    scrapePath("pricing", paths.pricing, scrapeTool, company.name),
+    scrapePath("docs", paths.docs, scrapeTool, company.name),
+    scrapePath("about", paths.about, scrapeTool, company.name),
   ]);
 
   if (!process.env.GOOGLE_AI_API_KEY) {
@@ -65,6 +94,9 @@ async function extractSingleCompany(
   );
 
   logExtraction("company.done", { company: company.name });
+
+  extractionProgress.completed++;
+
   return { extractedData: [extracted] };
 }
 

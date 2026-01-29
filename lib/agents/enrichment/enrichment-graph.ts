@@ -5,6 +5,7 @@ import { Annotation, Send, StateGraph } from "@langchain/langgraph";
 
 import { getBrightDataTool, resetBrightDataClient, type BrightDataTool } from "@/lib/mcp/bright-data";
 import { cachePage, getCachedPage, type CacheCategory } from "@/lib/db/mongodb";
+import { getProgressEmitter } from "@/lib/agents/orchestration/progress";
 import type { CompanyLead } from "../discovery/types";
 import type { EnrichmentStats, ScrapedPage } from "./types";
 import { reflectForCompanies } from "./reflect-for-companies";
@@ -68,13 +69,22 @@ function isSessionNotFound(error: unknown): boolean {
 
 async function scrapeUrlWithRecovery(
   url: string,
-  tool: BrightDataTool
+  tool: BrightDataTool,
+  companyName?: string
 ): Promise<string | null> {
+  const emitter = getProgressEmitter();
+
   // Check cache first
   if (shouldUseCache()) {
     const cached = await getCachedPage(url);
     if (cached?.data?.[CACHE_CATEGORY]) {
       logEnrichment("cache.hit", { url });
+      emitter?.emit({
+        stage: "enrichment",
+        substage: "scraping",
+        message: `Cache hit: ${companyName || url}`,
+        company: companyName,
+      });
       return cached.data[CACHE_CATEGORY];
     }
   }
@@ -121,6 +131,9 @@ async function scrapeUrlWithRecovery(
   }
 }
 
+// Track enrichment progress globally for this request
+let enrichmentProgress = { completed: 0, total: 0 };
+
 function fanOutEnrichment(state: typeof EnrichmentState.State): Send[] {
   const validLeads: Send[] = [];
   let skipped = 0;
@@ -145,6 +158,18 @@ function fanOutEnrichment(state: typeof EnrichmentState.State): Send[] {
     skipped,
   });
 
+  // Initialize progress tracking
+  enrichmentProgress = { completed: 0, total: validLeads.length };
+
+  const emitter = getProgressEmitter();
+  emitter?.emit({
+    stage: "enrichment",
+    substage: "scraping",
+    message: `Filtering URLs... ${skipped} blocklisted, ${validLeads.length} to process`,
+    progress: 0,
+    total: validLeads.length,
+  });
+
   // Return skipped count update along with Send commands
   // Note: We handle skipped count in aggregation since Send doesn't allow state updates
   return validLeads;
@@ -154,13 +179,32 @@ async function scrapeAndReflect(
   state: LeadEnrichmentState
 ): Promise<{ scrapedPages: ScrapedPage[] }> {
   const { lead, marketSector } = state;
+  const emitter = getProgressEmitter();
+
   logEnrichment("lead.start", { name: lead.name, url: lead.url });
 
+  // Emit scraping progress
+  emitter?.emit({
+    stage: "enrichment",
+    substage: "scraping",
+    message: `Scraping ${lead.name}...`,
+    company: lead.name,
+    progress: enrichmentProgress.completed,
+    total: enrichmentProgress.total,
+  });
+
   const scrapeTool = await getBrightDataTool("scrape_as_markdown");
-  const content = await scrapeUrlWithRecovery(lead.url, scrapeTool);
+  const content = await scrapeUrlWithRecovery(lead.url, scrapeTool, lead.name);
 
   if (!content) {
     logEnrichment("lead.no-content", { url: lead.url });
+    emitter?.emit({
+      stage: "enrichment",
+      substage: "scraping",
+      message: `No content: ${lead.name}`,
+      company: lead.name,
+    });
+    enrichmentProgress.completed++;
     return {
       scrapedPages: [{ url: lead.url, companies: [], error: "No content scraped" }],
     };
@@ -169,6 +213,14 @@ async function scrapeAndReflect(
   if (!process.env.GOOGLE_AI_API_KEY) {
     throw new Error("Missing GOOGLE_AI_API_KEY.");
   }
+
+  // Emit reflecting progress
+  emitter?.emit({
+    stage: "enrichment",
+    substage: "reflecting",
+    message: `Analyzing ${lead.name}...`,
+    company: lead.name,
+  });
 
   const llm = new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
@@ -211,12 +263,22 @@ async function scrapeAndReflect(
     extractedCount: companies.length,
   });
 
+  enrichmentProgress.completed++;
+
   return {
     scrapedPages: [{ url: lead.url, companies }],
   };
 }
 
 function aggregateCompanies(state: typeof EnrichmentState.State) {
+  const emitter = getProgressEmitter();
+
+  emitter?.emit({
+    stage: "enrichment",
+    substage: "aggregating",
+    message: "Aggregating and deduplicating companies...",
+  });
+
   const allCompanies = state.scrapedPages.flatMap((p) => p.companies);
   const deduped = dedupeByDomain(allCompanies);
 
@@ -233,6 +295,12 @@ function aggregateCompanies(state: typeof EnrichmentState.State) {
   };
 
   logEnrichment("aggregate", stats);
+
+  emitter?.emit({
+    stage: "enrichment",
+    substage: "aggregating",
+    message: `Validated ${deduped.length} companies for analysis`,
+  });
 
   return {
     enrichedCompanies: deduped,

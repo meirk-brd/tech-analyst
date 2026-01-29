@@ -6,6 +6,7 @@ import {
   type BrightDataTool,
 } from "@/lib/mcp/bright-data";
 import { cachePage, getCachedPage } from "@/lib/db/mongodb";
+import { getProgressEmitter } from "@/lib/agents/orchestration/progress";
 import type { ScrapeCategory, ScrapeResult } from "./types";
 import { logExtraction } from "./logger";
 
@@ -76,9 +77,12 @@ function pickCachedContent(
 export async function scrapePath(
   category: ScrapeCategory,
   candidates: string[],
-  scrapeTool: BrightDataTool
+  scrapeTool: BrightDataTool,
+  companyName?: string
 ): Promise<ScrapeResult | null> {
+  const emitter = getProgressEmitter();
   let tool = scrapeTool;
+
   for (const url of candidates) {
     try {
       if (shouldUseCache()) {
@@ -86,6 +90,12 @@ export async function scrapePath(
         const cachedValue = pickCachedContent(cached, category);
         if (cachedValue) {
           logExtraction("cache.hit", { category, url });
+          emitter?.emit({
+            stage: "extraction",
+            substage: "extracting",
+            message: `Cache hit: ${companyName || "unknown"} (${category})`,
+            company: companyName,
+          });
           return { url, content: cachedValue };
         }
       }

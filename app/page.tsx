@@ -23,6 +23,7 @@ export default function Home() {
   const {
     isLoading,
     currentStage,
+    currentSubstage,
     logs,
     result,
     error,
@@ -120,7 +121,7 @@ export default function Home() {
               {/* Progress stepper */}
               {(isLoading || currentStage) && (
                 <div className="mb-6 bg-slate-900/50 border border-white/10 rounded-xl p-4">
-                  <ProgressStepper currentStage={currentStage} />
+                  <ProgressStepper currentStage={currentStage} currentSubstage={currentSubstage} />
                 </div>
               )}
 
