@@ -9,11 +9,16 @@ interface HeroSectionProps {
 export function HeroSection({ children }: HeroSectionProps) {
   return (
     <section className="text-center px-4 py-20">
-      {/* Badge */}
+      {/* CTA Button */}
       <div className="mb-8">
-        <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-[#9D97F4]/20 via-[#3D7FFC]/20 to-[#15C1E6]/20 border border-[#3D7FFC]/30 rounded-full text-[#3D7FFC] text-sm font-medium">
-          AI-Powered Competitive Intelligence
-        </span>
+        <a
+          href="https://brightdata.com/?hs_signup=1&utm_source=demo&utm_medium=market-analyst&utm_campaign=market-analyst&promo=market-analyst"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#9D97F4] via-[#3D7FFC] to-[#15C1E6] text-white font-medium text-sm rounded-lg shadow-lg shadow-[#3D7FFC]/20 hover:shadow-[#3D7FFC]/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+        >
+          Claim free credits
+        </a>
       </div>
 
       {/* Title */}

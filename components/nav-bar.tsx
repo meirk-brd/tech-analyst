@@ -11,7 +11,12 @@ export function NavBar({ onPreviousSearchesClick }: NavBarProps) {
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[#091B36]/90 backdrop-blur-md border-b border-[#29436E]/50">
       <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between lg:px-8">
         {/* Logo */}
-        <div className="flex items-center gap-2">
+        <a
+          href="https://docs.brightdata.com/introduction"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
           <img
             src={`${basePath}/bright-data-logo.png`}
             alt="Bright Data"
@@ -23,7 +28,7 @@ export function NavBar({ onPreviousSearchesClick }: NavBarProps) {
             alt="MongoDB"
             className="h-8"
           />
-        </div>
+        </a>
 
         {/* Nav links */}
         <div className="flex items-center gap-4">

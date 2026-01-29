@@ -64,7 +64,7 @@ export function RateLimitModal({ isOpen, onClose }: RateLimitModalProps) {
         {/* Actions */}
         <div className="space-y-3">
           <a
-            href="https://github.com/anthropics/claude-code"
+            href="https://github.com/meirk-brd/tech-analyst"
             target="_blank"
             rel="noopener noreferrer"
             className="w-full py-3 bg-gradient-to-r from-[#9D97F4] via-[#3D7FFC] to-[#15C1E6] text-white font-medium rounded-xl flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-[#3D7FFC]/30 transition-all duration-200"
@@ -76,7 +76,7 @@ export function RateLimitModal({ isOpen, onClose }: RateLimitModalProps) {
           </a>
 
           <a
-            href="https://brightdata.com"
+            href="https://brightdata.com/?hs_signup=1&utm_source=demo&utm_medium=market-analyst&utm_campaign=market-analyst&promo=market-analyst"
             target="_blank"
             rel="noopener noreferrer"
             className="w-full py-3 bg-white/5 border border-white/10 text-white font-medium rounded-xl flex items-center justify-center gap-2 hover:bg-white/10 transition-all duration-200"
