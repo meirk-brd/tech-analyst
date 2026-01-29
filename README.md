@@ -6,6 +6,10 @@
 
 <p align="center">
   <strong>AI-Powered Market Research & Competitive Intelligence Platform</strong>
+
+  <p align="center">
+  <img src="./assets/screenshot.png" alt="Tech Analyst UI Screenshot" width="800"/>
+</p>
 </p>
 
 <p align="center">
@@ -29,14 +33,6 @@ Enter a market sector (e.g., "AI Code Assistants", "Cloud Database Providers"), 
 2. **Extract** pricing, documentation, and company information from their websites
 3. **Score** companies on feature depth, innovation, positioning, and pricing maturity
 4. **Visualize** results using Gartner Magic Quadrant, Forrester Wave, and GigaOm Radar charts
-
----
-
-## Demo
-
-<p align="center">
-  <img src="./assets/screenshot.png" alt="Tech Analyst UI Screenshot" width="800"/>
-</p>
 
 ---
 
