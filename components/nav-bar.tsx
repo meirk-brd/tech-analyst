@@ -15,29 +15,29 @@ export function NavBar({ onPreviousSearchesClick }: NavBarProps) {
           href="https://docs.brightdata.com/introduction"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-1 sm:gap-2 hover:opacity-80 transition-opacity shrink-0"
         >
           <img
             src={`${basePath}/bright-data-logo.png`}
             alt="Bright Data"
-            className="h-8"
+            className="h-5 sm:h-8"
           />
-          🤝
+          <span className="text-xs sm:text-base">🤝</span>
           <img
             src={`${basePath}/mongodb-logo.png`}
             alt="MongoDB"
-            className="h-8"
+            className="h-5 sm:h-8"
           />
         </a>
 
         {/* Nav links */}
-        <div className="flex items-center gap-4">
-          <a href="/" className="text-white/70 hover:text-white text-sm transition-colors">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <a href={basePath || "/"} className="text-white/70 hover:text-white text-xs sm:text-sm transition-colors">
             Home
           </a>
           <button
             onClick={onPreviousSearchesClick}
-            className="px-4 py-1.5 bg-[#3D7FFC]/10 border border-[#3D7FFC]/30 text-[#3D7FFC] text-sm font-medium rounded-lg hover:bg-[#3D7FFC]/20 transition-colors"
+            className="px-2 sm:px-4 py-1 sm:py-1.5 bg-[#3D7FFC]/10 border border-[#3D7FFC]/30 text-[#3D7FFC] text-xs sm:text-sm font-medium rounded-lg hover:bg-[#3D7FFC]/20 transition-colors whitespace-nowrap"
           >
             Previous Searches
           </button>
