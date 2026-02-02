@@ -28,21 +28,22 @@ type CompanyExtractionState = {
 let extractionProgress = { completed: 0, total: 0 };
 
 function fanOutExtraction(state: typeof ExtractionState.State): Send[] {
-  logExtraction("fanout", { companies: state.companies.length });
+  const companies = state.companies ?? [];
+  logExtraction("fanout", { companies: companies.length });
 
   // Initialize progress tracking
-  extractionProgress = { completed: 0, total: state.companies.length };
+  extractionProgress = { completed: 0, total: companies.length };
 
   const emitter = getProgressEmitter();
   emitter?.emit({
     stage: "extraction",
     substage: "extracting",
-    message: `Extracting data from ${state.companies.length} companies...`,
+    message: `Extracting data from ${companies.length} companies...`,
     progress: 0,
-    total: state.companies.length,
+    total: companies.length,
   });
 
-  return state.companies.map((company) => new Send("extractSingleCompany", { company }));
+  return companies.map((company) => new Send("extractSingleCompany", { company }));
 }
 
 async function extractSingleCompany(

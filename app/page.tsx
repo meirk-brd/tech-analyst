@@ -69,7 +69,7 @@ export default function Home() {
   const displayResult = loadedFromHistory ? loadedResult : result;
 
   // Scroll to results when analysis starts
-  const hasResults = displayResult?.scores && displayResult.scores.length > 0;
+  const hasResults = displayResult?.scores && displayResult.scores?.length > 0;
   const hasVisualizations = displayResult?.visualizations;
   const showResultsSection = isLoading || isLoadingSession || hasResults || error;
 
@@ -160,7 +160,7 @@ export default function Home() {
                   {hasResults && (
                     <div className="flex items-center justify-between">
                       <div className="text-white/60 text-sm">
-                        Showing <span className="text-white">{displayResult!.scores.length}</span> companies
+                        Showing <span className="text-white">{displayResult?.scores?.length ?? 0}</span> companies
                         <span className="mx-2">•</span>
                         {loadedFromHistory ? (
                           <span className="text-[#3D7FFC]">From history</span>
