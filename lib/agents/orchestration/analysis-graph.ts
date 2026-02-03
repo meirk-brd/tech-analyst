@@ -42,36 +42,39 @@ const AnalysisState = Annotation.Root({
 async function discoveryNode(state: typeof AnalysisState.State) {
   logOrchestration("discovery.start", { marketSector: state.marketSector });
   const result = await runDiscovery(state.marketSector);
-  logOrchestration("discovery.done", { companies: result.companies.length });
+  const companies = result.companies ?? [];
+  logOrchestration("discovery.done", { companies: companies.length });
   return {
-    companies: result.companies,
+    companies,
     status: "enrichment" as const,
   };
 }
 
 async function enrichmentNode(state: typeof AnalysisState.State) {
-  logOrchestration("enrichment.start", { leads: state.companies.length });
+  logOrchestration("enrichment.start", { leads: state.companies?.length ?? 0 });
   const enrichmentApp = getEnrichmentApp();
   const result = await enrichmentApp.invoke({
     marketSector: state.marketSector,
-    leads: state.companies,
+    leads: state.companies ?? [],
   });
+  const enrichedCompanies = result.enrichedCompanies ?? [];
   logOrchestration("enrichment.done", {
-    input: state.companies.length,
-    output: result.enrichedCompanies.length,
+    input: state.companies?.length ?? 0,
+    output: enrichedCompanies.length,
     stats: result.stats,
   });
   return {
-    companies: result.enrichedCompanies,
+    companies: enrichedCompanies,
     status: "extraction" as const,
   };
 }
 
 async function extractionNode(state: typeof AnalysisState.State) {
-  logOrchestration("extraction.start", { companies: state.companies.length });
+  const companies = state.companies ?? [];
+  logOrchestration("extraction.start", { companies: companies.length });
   const extractionApp = getExtractionApp();
   const result = await extractionApp.invoke(
-    { companies: state.companies, status: "pending" },
+    { companies, status: "pending" },
     {
       configurable: {
         thread_id: crypto.randomUUID(),
@@ -79,16 +82,18 @@ async function extractionNode(state: typeof AnalysisState.State) {
       },
     }
   );
-  logOrchestration("extraction.done", { extracted: result.extractedData.length });
+  const extractedData = result.extractedData ?? [];
+  logOrchestration("extraction.done", { extracted: extractedData.length });
   return {
-    extractedData: result.extractedData,
+    extractedData,
     status: "synthesis" as const,
   };
 }
 
 function synthesisNode(state: typeof AnalysisState.State) {
-  logOrchestration("synthesis.start", { extracted: state.extractedData.length });
-  const scores = calculateScores(state.extractedData, { normalize: true });
+  const extractedData = state.extractedData ?? [];
+  logOrchestration("synthesis.start", { extracted: extractedData.length });
+  const scores = calculateScores(extractedData, { normalize: true });
   const csv = generateCsv(scores);
   logOrchestration("synthesis.done", { scored: scores.length });
   return {
@@ -99,8 +104,9 @@ function synthesisNode(state: typeof AnalysisState.State) {
 }
 
 async function visualizationNode(state: typeof AnalysisState.State) {
-  logOrchestration("visualization.start", { scores: state.scores.length, useRecharts: USE_RECHARTS });
-  const payload = state.scores.map((score) => ({
+  const scores = state.scores ?? [];
+  logOrchestration("visualization.start", { scores: scores.length, useRecharts: USE_RECHARTS });
+  const payload = scores.map((score) => ({
     company: score.company,
     vision: score.vision,
     execution: score.execution,

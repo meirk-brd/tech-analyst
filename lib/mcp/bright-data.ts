@@ -10,10 +10,18 @@ let cachedTools: BrightDataTool[] | null = null;
 let cachedToolsPromise: Promise<BrightDataTool[]> | null = null;
 const cachedToolByPartialName = new Map<string, BrightDataTool>();
 
+// Lock to prevent multiple simultaneous resets
+let resetPromise: Promise<void> | null = null;
+
 export type BrightDataTool = {
   name: string;
   invoke: (args: Record<string, unknown>) => Promise<unknown>;
 };
+
+function isSessionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("Session not found") || message.includes("code\":-32001");
+}
 
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
@@ -78,7 +86,7 @@ export function findBrightDataTool(
   return tools.find((tool) => tool.name.toLowerCase().includes(normalized));
 }
 
-export async function getBrightDataTool(partialName: string): Promise<BrightDataTool> {
+async function getRawBrightDataTool(partialName: string): Promise<BrightDataTool> {
   const normalized = partialName.toLowerCase();
   const cached = cachedToolByPartialName.get(normalized);
   if (cached) return cached;
@@ -98,18 +106,56 @@ export async function getBrightDataTool(partialName: string): Promise<BrightData
   return tool;
 }
 
-export async function resetBrightDataClient(): Promise<void> {
-  const client = cachedClient;
-  cachedClient = null;
-  cachedTools = null;
-  cachedToolsPromise = null;
-  cachedToolByPartialName.clear();
+/**
+ * Gets a Bright Data tool with automatic session recovery.
+ * If a session error occurs during invocation, it will reset the client and retry once.
+ */
+export async function getBrightDataTool(partialName: string): Promise<BrightDataTool> {
+  const rawTool = await getRawBrightDataTool(partialName);
 
-  if (client) {
-    try {
-      await client.close();
-    } catch {
-      // Ignore shutdown errors so callers can recover.
+  return {
+    name: rawTool.name,
+    invoke: async (args: Record<string, unknown>) => {
+      try {
+        return await rawTool.invoke(args);
+      } catch (error) {
+        if (isSessionError(error)) {
+          // Reset client and get fresh tool
+          await resetBrightDataClient();
+          const freshTool = await getRawBrightDataTool(partialName);
+          return await freshTool.invoke(args);
+        }
+        throw error;
+      }
+    },
+  };
+}
+
+export async function resetBrightDataClient(): Promise<void> {
+  // If a reset is already in progress, wait for it instead of starting another
+  if (resetPromise) {
+    return resetPromise;
+  }
+
+  resetPromise = (async () => {
+    const client = cachedClient;
+    cachedClient = null;
+    cachedTools = null;
+    cachedToolsPromise = null;
+    cachedToolByPartialName.clear();
+
+    if (client) {
+      try {
+        await client.close();
+      } catch {
+        // Ignore shutdown errors so callers can recover.
+      }
     }
+  })();
+
+  try {
+    await resetPromise;
+  } finally {
+    resetPromise = null;
   }
 }
