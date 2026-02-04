@@ -21,11 +21,14 @@ export type CompanyLead = {
  * Visualizations can contain either:
  * - Pre-rendered images (ImageResult) from AI generation (legacy)
  * - Chart data for client-side rendering with Recharts (new)
+ * - Pyramid visualization showing tiered company categorization
  */
 export type Visualizations = {
   quadrant: ImageResult;
   wave: ImageResult;
   radar: ImageResult;
+  /** Pyramid visualization showing 3-tier company categorization */
+  pyramid?: ImageResult;
   /** Chart data for client-side rendering (default; set USE_RECHARTS=false to use AI) */
   chartData?: ChartDataResult;
 };
