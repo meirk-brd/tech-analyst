@@ -87,3 +87,85 @@ export function buildGigaOmRadarPrompt(scores: VisualizationScores): string {
     formatRadar(scores),
   ].join("\n");
 }
+
+type PyramidTier = {
+  name: string;
+  companies: string[];
+};
+
+function categorizeToPyramidTiers(scores: VisualizationScores): PyramidTier[] {
+  // Sort by combined score (vision + execution)
+  const sorted = [...scores].sort(
+    (a, b) => (b.vision + b.execution) - (a.vision + a.execution)
+  );
+
+  // Categorize into 3 tiers based on quadrant and scores
+  const topNotch: string[] = [];
+  const established: string[] = [];
+  const grounded: string[] = [];
+
+  for (const score of sorted) {
+    const combined = score.vision + score.execution;
+
+    // Top Notch Startups: Leaders with high combined scores (innovative, high potential)
+    if (score.quadrant === "Leaders" || (score.quadrant === "Visionaries" && combined >= 140)) {
+      topNotch.push(score.company);
+    }
+    // Established Companies: Challengers or high-performing Visionaries/Niche Players
+    else if (score.quadrant === "Challengers" || (score.quadrant === "Visionaries" && combined >= 100)) {
+      established.push(score.company);
+    }
+    // Grounded Enterprises: Niche Players and others
+    else {
+      grounded.push(score.company);
+    }
+  }
+
+  return [
+    { name: "Top Notch Startups", companies: topNotch },
+    { name: "Established Companies", companies: established },
+    { name: "Grounded Enterprises", companies: grounded },
+  ];
+}
+
+function formatPyramidTiers(tiers: PyramidTier[]): string {
+  return tiers
+    .map((tier) => {
+      const companies = tier.companies.length > 0
+        ? tier.companies.join(", ")
+        : "(none)";
+      return `- ${tier.name}: ${companies}`;
+    })
+    .join("\n");
+}
+
+export function buildPyramidPrompt(scores: VisualizationScores, marketSector?: string): string {
+  const tiers = categorizeToPyramidTiers(scores);
+  const title = marketSector ? `${marketSector} Market Pyramid` : "Market Analysis Pyramid";
+
+  return [
+    `Create a professional 3-tier pyramid infographic titled "${title}".`,
+    "",
+    "Visual Design Requirements:",
+    "- The pyramid should be a classic triangle shape divided into 3 horizontal tiers",
+    "- Use a dark, modern color scheme with gradient fills:",
+    "  - Top tier (smallest): Gold/amber gradient (#F59E0B to #D97706) - represents elite, top performers",
+    "  - Middle tier: Electric blue gradient (#3B82F6 to #1D4ED8) - represents established players",
+    "  - Bottom tier (largest): Deep purple/indigo gradient (#6366F1 to #4338CA) - represents foundation/grounded players",
+    "- Add subtle glow effects around each tier",
+    "- Use a dark background (#0F172A or similar) for modern tech aesthetic",
+    "- White or light gray text for company names",
+    "",
+    "Layout:",
+    "- Top tier (peak): smallest width, labeled 'TOP NOTCH STARTUPS' with company names inside",
+    "- Middle tier: medium width, labeled 'ESTABLISHED COMPANIES' with company names inside",
+    "- Bottom tier (base): largest width, labeled 'GROUNDED ENTERPRISES' with company names inside",
+    "",
+    "Tier Labels should be bold, positioned at the left edge of each tier.",
+    "Company names should be listed inside each tier, centered or distributed evenly.",
+    "Add a subtle 3D effect or shadow to give depth to the pyramid.",
+    "",
+    "Data to display:",
+    formatPyramidTiers(tiers),
+  ].join("\n");
+}

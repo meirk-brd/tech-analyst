@@ -8,22 +8,13 @@ import { getExtractionApp } from "@/lib/agents/extraction/extraction-graph";
 import { getExtractionMaxConcurrency } from "@/lib/agents/extraction/concurrency";
 import { calculateScores } from "@/lib/agents/synthesis/scoring";
 import { generateCsv } from "@/lib/agents/synthesis/csv";
-import { generateChartData } from "@/lib/agents/visualization/generate-chart-data";
-// Legacy AI-based image generation (kept for fallback)
-import {
-  buildForresterWavePrompt,
-  buildGigaOmRadarPrompt,
-  buildMagicQuadrantPrompt,
-} from "@/lib/agents/visualization/prompts";
+import { buildPyramidPrompt } from "@/lib/agents/visualization/prompts";
 import { generateImage } from "@/lib/agents/visualization/generate-image";
 import type { AnalysisStatus, CompanyLead, Visualizations } from "./types";
 import type { ExtractedCompanyData } from "@/lib/agents/extraction/types";
 import type { ScoredCompany } from "@/lib/agents/synthesis/types";
 import type { ImageResult } from "@/lib/agents/visualization/types";
 import { logOrchestration } from "./logger";
-
-// Feature flag for Recharts-based visualization (default on; set USE_RECHARTS=false to use AI)
-const USE_RECHARTS = process.env.USE_RECHARTS !== "false" && process.env.USE_RECHARTS !== "0";
 
 const AnalysisState = Annotation.Root({
   marketSector: Annotation<string>(),
@@ -105,7 +96,7 @@ function synthesisNode(state: typeof AnalysisState.State) {
 
 async function visualizationNode(state: typeof AnalysisState.State) {
   const scores = state.scores ?? [];
-  logOrchestration("visualization.start", { scores: scores.length, useRecharts: USE_RECHARTS });
+  logOrchestration("visualization.start", { scores: scores.length });
   const payload = scores.map((score) => ({
     company: score.company,
     vision: score.vision,
@@ -113,47 +104,25 @@ async function visualizationNode(state: typeof AnalysisState.State) {
     quadrant: score.quadrant,
   }));
 
-  if (USE_RECHARTS) {
-    // New: Generate chart data for client-side rendering
-    const chartData = generateChartData(payload, {
-      quadrantTitle: `Magic Quadrant for ${state.marketSector}`,
-      waveSubtitle: state.marketSector,
-      radarCategory: state.marketSector,
-    });
+  // Generate pyramid visualization using Gemini AI
+  const pyramidPrompt = buildPyramidPrompt(payload, state.marketSector);
+  const pyramid = await generateImage(pyramidPrompt);
 
-    // Create placeholder ImageResults - client will render and replace with actual PNGs
-    const placeholderImage: ImageResult = {
-      mimeType: "image/png",
-      base64: "",
-      dataUrl: "",
-    };
+  // Create placeholder for legacy fields (not used but required by type)
+  const placeholderImage: ImageResult = {
+    mimeType: "image/png",
+    base64: "",
+    dataUrl: "",
+  };
 
-    logOrchestration("visualization.done", { mode: "recharts", charts: 3 });
-    return {
-      visualizations: {
-        quadrant: placeholderImage,
-        wave: placeholderImage,
-        radar: placeholderImage,
-        chartData,
-      } satisfies Visualizations,
-      status: "completed" as const,
-    };
-  }
-
-  // Legacy: AI-based image generation
-  const quadrantPrompt = buildMagicQuadrantPrompt(payload);
-  const wavePrompt = buildForresterWavePrompt(payload);
-  const radarPrompt = buildGigaOmRadarPrompt(payload);
-
-  const [quadrant, wave, radar] = await Promise.all([
-    generateImage(quadrantPrompt),
-    generateImage(wavePrompt),
-    generateImage(radarPrompt),
-  ]);
-
-  logOrchestration("visualization.done", { mode: "ai", images: 3 });
+  logOrchestration("visualization.done", { mode: "pyramid", images: 1 });
   return {
-    visualizations: { quadrant, wave, radar },
+    visualizations: {
+      quadrant: placeholderImage,
+      wave: placeholderImage,
+      radar: placeholderImage,
+      pyramid,
+    } satisfies Visualizations,
     status: "completed" as const,
   };
 }
