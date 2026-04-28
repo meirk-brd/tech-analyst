@@ -46,6 +46,19 @@ export interface CompanyCache {
   expiresAt: Date;
 }
 
+export interface ProgressSnapshot {
+  status: "pending" | "processing" | "completed" | "failed";
+  stage: "discovery" | "enrichment" | "extraction" | "synthesis" | "visualization";
+  substage?: string;
+  done?: number;
+  total?: number;
+  current?: string;
+  message: string;
+  updatedAt: Date; // stored as Date in Mongo; serialized to ISO string by JSON.stringify
+  error?: string;
+  companyCount?: number;
+}
+
 export interface AnalysisSession {
   _id?: string;
   marketSector: string;
@@ -63,6 +76,7 @@ export interface AnalysisSession {
     csv?: string;
   };
   error?: string;
+  progress?: ProgressSnapshot;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -187,4 +201,37 @@ export async function getSession(id: string): Promise<AnalysisSession | null> {
     .findOne({ _id: objectId as any });
 
   return session;
+}
+
+// Per-session timestamp of the last accepted progress write. Throttles
+// rapid-fire substage events (e.g. discovery's 36-search burst) so we
+// don't pound MongoDB. Last-write-wins per session.
+const lastProgressWriteMs = new Map<string, number>();
+const PROGRESS_THROTTLE_MS = 500;
+
+export async function writeProgress(
+  sessionId: string,
+  snapshot: Omit<ProgressSnapshot, "updatedAt">,
+): Promise<void> {
+  const now = Date.now();
+  const last = lastProgressWriteMs.get(sessionId) ?? 0;
+  const isTerminal =
+    snapshot.status === "completed" || snapshot.status === "failed";
+  // Always write terminal states; throttle non-terminal updates.
+  if (!isTerminal && now - last < PROGRESS_THROTTLE_MS) return;
+  lastProgressWriteMs.set(sessionId, now);
+
+  const db = await connectToDatabase();
+  await db.collection<AnalysisSession>("analysis_sessions").updateOne(
+    { _id: new ObjectId(sessionId) as any },
+    {
+      $set: {
+        progress: { ...snapshot, updatedAt: new Date() },
+        updatedAt: new Date(),
+      },
+    },
+  ).catch((error) => {
+    // Progress writes are best-effort — log and move on.
+    console.error("writeProgress failed:", error);
+  });
 }
