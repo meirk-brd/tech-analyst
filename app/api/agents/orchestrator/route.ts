@@ -10,7 +10,7 @@ export const maxDuration = 800;
 import { parseMarketSector } from "@/lib/agents/orchestration/parse-input";
 import { createProgressEmitter, clearProgressEmitter } from "@/lib/agents/orchestration/progress";
 import type { Visualizations } from "@/lib/agents/orchestration/types";
-import { createSession, updateSession } from "@/lib/db/mongodb";
+import { createSession, updateSession, writeProgress } from "@/lib/db/mongodb";
 import { getRateLimitInfo, getClientIP, hasInternalBypass } from "@/lib/rate-limiter";
 
 function wantsStream(request: Request): boolean {
@@ -148,6 +148,7 @@ export async function POST(request: Request) {
       // Set up progress emitter to forward granular events to SSE
       const progressEmitter = createProgressEmitter();
       progressEmitter.setCallback((event) => {
+        // Forward to SSE consumers (existing behavior — UI relies on this).
         send({
           type: "progress",
           stage: event.stage,
@@ -157,6 +158,18 @@ export async function POST(request: Request) {
           total: event.total,
           company: event.company,
         });
+        // Also persist to MongoDB for MCP polling (throttled inside writeProgress).
+        if (sessionId) {
+          void writeProgress(sessionId, {
+            status: "processing",
+            stage: event.stage,
+            substage: event.substage,
+            done: event.progress,
+            total: event.total,
+            current: event.company,
+            message: event.message,
+          });
+        }
       });
 
       try {
@@ -223,6 +236,12 @@ export async function POST(request: Request) {
                 csv: result.csv,
               },
             }).catch((e) => console.error("Failed to save session:", e));
+            await writeProgress(sessionId, {
+              status: "completed",
+              stage: "visualization",
+              message: "Analysis complete",
+              companyCount: result.companies?.length ?? 0,
+            });
           }
 
           send({
@@ -242,6 +261,12 @@ export async function POST(request: Request) {
             status: "failed",
             error: message,
           }).catch((e) => console.error("Failed to save session error:", e));
+          await writeProgress(sessionId, {
+            status: "failed",
+            stage: "discovery", // best-effort; we don't know which stage failed at this layer
+            message: `Pipeline failed: ${message}`,
+            error: message,
+          });
         }
 
         send({ type: "error", error: message, sessionId });
