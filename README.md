@@ -344,7 +344,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 - [Bright Data](https://brightdata.com/) — Web scraping infrastructure and MCP integration
 - [LangChain](https://langchain.com/) — LLM orchestration framework
 - [Google Gemini](https://deepmind.google/technologies/gemini/) — AI model powering analysis
-- [Recharts](https://recharts.org/) — React charting library
+- [Recharts](https://recharts.org/) — React charting library.
 
 ---
 
