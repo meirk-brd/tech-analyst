@@ -46,6 +46,18 @@ export async function getRateLimitInfo(ip: string): Promise<RateLimitInfo> {
   };
 }
 
+/**
+ * Returns true when the request carries a valid internal bearer token.
+ * Used by the MCP adapter (tech-analyst-mcp) so its single upstream IP
+ * isn't rate-limited like an end user.
+ */
+export function hasInternalBypass(request: Request): boolean {
+  const expected = process.env.INTERNAL_API_TOKEN;
+  if (!expected) return false;
+  const auth = request.headers.get("authorization");
+  return auth === `Bearer ${expected}`;
+}
+
 export async function getClientIP(): Promise<string> {
   const headersList = await headers();
 

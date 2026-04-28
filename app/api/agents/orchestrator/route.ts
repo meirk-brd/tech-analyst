@@ -5,7 +5,7 @@ import { parseMarketSector } from "@/lib/agents/orchestration/parse-input";
 import { createProgressEmitter, clearProgressEmitter } from "@/lib/agents/orchestration/progress";
 import type { Visualizations } from "@/lib/agents/orchestration/types";
 import { createSession, updateSession } from "@/lib/db/mongodb";
-import { getRateLimitInfo, getClientIP } from "@/lib/rate-limiter";
+import { getRateLimitInfo, getClientIP, hasInternalBypass } from "@/lib/rate-limiter";
 
 function wantsStream(request: Request): boolean {
   const url = new URL(request.url);
@@ -25,9 +25,12 @@ function extractVisualizationsPayload(visualizations?: Visualizations) {
 }
 
 export async function POST(request: Request) {
-  // Rate limit check
+  // Rate limit check — skipped when the request carries the shared internal token.
+  const internalBypass = hasInternalBypass(request);
   const ip = await getClientIP();
-  const rateLimit = await getRateLimitInfo(ip);
+  const rateLimit = internalBypass
+    ? { allowed: true, current: 0, limit: Number.POSITIVE_INFINITY, remaining: Number.POSITIVE_INFINITY }
+    : await getRateLimitInfo(ip);
 
   if (!rateLimit.allowed) {
     return NextResponse.json(
