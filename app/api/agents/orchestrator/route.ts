@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { getAnalysisApp } from "@/lib/agents/orchestration/analysis-graph";
+
+// Pipeline takes 1-5 minutes. Vercel Pro Fluid caps at 800s; raise the
+// per-route budget explicitly so we don't inherit whatever the platform
+// default is on the day of deploy.
+export const maxDuration = 800;
+
 import { parseMarketSector } from "@/lib/agents/orchestration/parse-input";
 import { createProgressEmitter, clearProgressEmitter } from "@/lib/agents/orchestration/progress";
 import type { Visualizations } from "@/lib/agents/orchestration/types";
@@ -116,10 +122,27 @@ export async function POST(request: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      // Swallow enqueue errors after the consumer disconnects. The MCP
+      // adapter intentionally closes the SSE connection early after
+      // capturing the session id (fire-and-poll, since MCP clients cap
+      // tool calls at 60s). The pipeline must continue running and
+      // writing to MongoDB regardless of consumer state.
+      let consumerGone = false;
       const send = (payload: unknown) => {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)
-        );
+        if (consumerGone) return;
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)
+          );
+        } catch (e: unknown) {
+          // ERR_INVALID_STATE means the controller is closed (consumer
+          // disconnected). Stop trying; let the pipeline finish quietly.
+          if (e instanceof TypeError || (e as { code?: string })?.code === "ERR_INVALID_STATE") {
+            consumerGone = true;
+            return;
+          }
+          throw e;
+        }
       };
 
       // Set up progress emitter to forward granular events to SSE
@@ -224,7 +247,7 @@ export async function POST(request: Request) {
         send({ type: "error", error: message, sessionId });
       } finally {
         clearProgressEmitter();
-        controller.close();
+        try { controller.close(); } catch { /* already closed by consumer disconnect */ }
       }
     },
   });
