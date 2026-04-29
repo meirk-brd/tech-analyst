@@ -1,9 +1,9 @@
 import "server-only";
 
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { Annotation, Send, StateGraph } from "@langchain/langgraph";
 
 import { getBrightDataTool } from "@/lib/mcp/bright-data";
+import { getLlm } from "@/lib/llm";
 import { cacheExtraction, getCachedExtraction } from "@/lib/db/mongodb";
 import { getProgressEmitter } from "@/lib/agents/orchestration/progress";
 import { detectPaths } from "./detect-paths";
@@ -97,15 +97,7 @@ async function extractSingleCompany(
     scrapePath("about", paths.about, scrapeTool, company.name),
   ]);
 
-  if (!process.env.GOOGLE_AI_API_KEY) {
-    throw new Error("Missing GOOGLE_AI_API_KEY.");
-  }
-
-  const llm = new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    temperature: 0,
-    apiKey: process.env.GOOGLE_AI_API_KEY,
-  });
+  const llm = getLlm();
 
   const extracted = await reflectOnScrapedPages(
     {

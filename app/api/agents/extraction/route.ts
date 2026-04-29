@@ -16,9 +16,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!process.env.GOOGLE_AI_API_KEY) {
+  if (!process.env.OPENROUTER_API_KEY) {
     return NextResponse.json(
-      { error: "Missing GOOGLE_AI_API_KEY." },
+      { error: "Missing OPENROUTER_API_KEY." },
       { status: 500 }
     );
   }

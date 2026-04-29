@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import { generateSearchQueries } from "@/lib/agents/discovery/generate-search-queries";
 import { runSearchQueries } from "@/lib/agents/discovery/run-search-queries";
@@ -7,6 +6,7 @@ import { extractCompanyLeads } from "@/lib/agents/discovery/extract-company-lead
 import { dedupeCompanyLeads } from "@/lib/agents/discovery/dedupe-company-leads";
 import { parseMarketSector } from "@/lib/agents/discovery/parse-market-sector";
 import { getBrightDataTool } from "@/lib/mcp/bright-data";
+import { getLlm } from "@/lib/llm";
 import { logDiscovery } from "@/lib/agents/discovery/logger";
 
 export async function POST(request: Request) {
@@ -20,18 +20,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!process.env.GOOGLE_AI_API_KEY) {
-    return NextResponse.json(
-      { error: "Missing GOOGLE_AI_API_KEY." },
-      { status: 500 }
-    );
-  }
-
-  const llm = new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    temperature: 0.7,
-    apiKey: process.env.GOOGLE_AI_API_KEY,
-  });
+  const llm = getLlm({ temperature: 0.7 });
 
   logDiscovery("request.start", { marketSector });
 

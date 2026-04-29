@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { getLlm } from "@/lib/llm";
 
 import { generateSearchQueries } from "@/lib/agents/discovery/generate-search-queries";
 import { runSearchQueries } from "@/lib/agents/discovery/run-search-queries";
@@ -13,17 +13,9 @@ import type { CompanyLead } from "./types";
 export async function runDiscovery(
   marketSector: string
 ): Promise<{ companies: CompanyLead[]; queries: string[] }> {
-  if (!process.env.GOOGLE_AI_API_KEY) {
-    throw new Error("Missing GOOGLE_AI_API_KEY.");
-  }
-
   const emitter = getProgressEmitter();
 
-  const llm = new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    temperature: 0.7,
-    apiKey: process.env.GOOGLE_AI_API_KEY,
-  });
+  const llm = getLlm({ temperature: 0.7 });
 
   // Emit: generating queries
   emitter?.emit({

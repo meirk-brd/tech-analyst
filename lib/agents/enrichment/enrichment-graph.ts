@@ -1,9 +1,9 @@
 import "server-only";
 
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { Annotation, Send, StateGraph } from "@langchain/langgraph";
 
 import { getBrightDataTool, resetBrightDataClient, type BrightDataTool } from "@/lib/mcp/bright-data";
+import { getLlm } from "@/lib/llm";
 import { cachePage, getCachedPage, type CacheCategory } from "@/lib/db/mongodb";
 import { getProgressEmitter } from "@/lib/agents/orchestration/progress";
 import type { CompanyLead } from "../discovery/types";
@@ -210,10 +210,6 @@ async function scrapeAndReflect(
     };
   }
 
-  if (!process.env.GOOGLE_AI_API_KEY) {
-    throw new Error("Missing GOOGLE_AI_API_KEY.");
-  }
-
   // Emit reflecting progress
   emitter?.emit({
     stage: "enrichment",
@@ -222,11 +218,7 @@ async function scrapeAndReflect(
     company: lead.name,
   });
 
-  const llm = new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    temperature: 0,
-    apiKey: process.env.GOOGLE_AI_API_KEY,
-  });
+  const llm = getLlm();
 
   const reflection = await reflectForCompanies(
     { url: lead.url, content, marketSector },

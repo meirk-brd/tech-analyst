@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import { parseSynthesisInput } from "@/lib/agents/synthesis/parse-input";
 import { calculateScores } from "@/lib/agents/synthesis/scoring";
 import { generateCsv } from "@/lib/agents/synthesis/csv";
 import { generateNarratives } from "@/lib/agents/synthesis/generate-narratives";
+import { getLlm } from "@/lib/llm";
 import { logSynthesis } from "@/lib/agents/synthesis/logger";
 
 export async function POST(request: Request) {
@@ -32,17 +32,7 @@ export async function POST(request: Request) {
 
   let narratives: Array<{ company: string; narrative: string }> | undefined;
   if (includeNarratives) {
-    if (!process.env.GOOGLE_AI_API_KEY) {
-      return NextResponse.json(
-        { error: "Missing GOOGLE_AI_API_KEY for narrative generation." },
-        { status: 500 }
-      );
-    }
-    const llm = new ChatGoogleGenerativeAI({
-      model: "gemini-2.5-flash",
-      temperature: 0.4,
-      apiKey: process.env.GOOGLE_AI_API_KEY,
-    });
+    const llm = getLlm({ temperature: 0.4 });
     narratives = await generateNarratives(llm, extractedData, scores);
   }
 
