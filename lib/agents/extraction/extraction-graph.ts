@@ -4,12 +4,17 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { Annotation, Send, StateGraph } from "@langchain/langgraph";
 
 import { getBrightDataTool } from "@/lib/mcp/bright-data";
+import { cacheExtraction, getCachedExtraction } from "@/lib/db/mongodb";
 import { getProgressEmitter } from "@/lib/agents/orchestration/progress";
 import { detectPaths } from "./detect-paths";
 import { scrapePath } from "./scrape-path";
 import { reflectOnScrapedPages } from "./reflect-extraction";
 import type { CompanyInput, ExtractedCompanyData } from "./types";
 import { logExtraction } from "./logger";
+
+function shouldUseExtractionCache(): boolean {
+  return Boolean(process.env.MONGODB_URI);
+}
 
 const ExtractionState = Annotation.Root({
   companies: Annotation<CompanyInput[]>(),
@@ -54,6 +59,25 @@ async function extractSingleCompany(
 
   logExtraction("company.start", { company: company.name });
 
+  // Cache short-circuit: a previous run extracted this URL within the TTL.
+  // Skip 3 scrapes + 1 LLM call for ~25-30s of warm-run savings on repeats.
+  if (shouldUseExtractionCache()) {
+    const cached = await getCachedExtraction<ExtractedCompanyData>(company.url);
+    if (cached) {
+      logExtraction("company.cache.hit", { company: company.name });
+      emitter?.emit({
+        stage: "extraction",
+        substage: "extracting",
+        message: `Cache hit: ${company.name}`,
+        company: company.name,
+        progress: extractionProgress.completed,
+        total: extractionProgress.total,
+      });
+      extractionProgress.completed++;
+      return { extractedData: [{ ...cached, company: company.name, url: company.url }] };
+    }
+  }
+
   // Emit progress for this company
   emitter?.emit({
     stage: "extraction",
@@ -93,6 +117,17 @@ async function extractSingleCompany(
     },
     llm
   );
+
+  // Persist for future runs. Best-effort — don't block the pipeline on a
+  // cache write failure.
+  if (shouldUseExtractionCache()) {
+    cacheExtraction(company.url, extracted).catch((err) => {
+      logExtraction("company.cache.error", {
+        company: company.name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
 
   logExtraction("company.done", { company: company.name });
 

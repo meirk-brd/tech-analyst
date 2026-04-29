@@ -88,6 +88,17 @@ export interface RateLimitDoc {
   createdAt: Date;
 }
 
+// Final structured extraction output, keyed by company URL. Hits here
+// short-circuit the entire extractSingleCompany pipeline (3 scrapes + LLM
+// reflection) to a single MongoDB read. 7-day TTL, same as scrape cache.
+export interface CompanyExtractionCache {
+  _id?: string;
+  url: string;
+  data: unknown; // ExtractedCompanyData — kept loose here to avoid a circular import.
+  extractedAt: Date;
+  expiresAt: Date;
+}
+
 export async function setupIndexes(): Promise<void> {
   const db = await connectToDatabase();
 
@@ -105,6 +116,13 @@ export async function setupIndexes(): Promise<void> {
     { ip: 1 },
     { unique: true }
   );
+
+  await db
+    .collection<CompanyExtractionCache>("company_extractions")
+    .createIndex({ url: 1 }, { unique: true });
+  await db
+    .collection<CompanyExtractionCache>("company_extractions")
+    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 }
 
 export async function getCachedPage(url: string): Promise<CompanyCache | null> {
@@ -127,6 +145,32 @@ export async function cachePage(url: string, data: CompanyCache["data"]): Promis
         url,
         data,
         scrapedAt: new Date(),
+        expiresAt,
+      },
+    },
+    { upsert: true }
+  );
+}
+
+export async function getCachedExtraction<T>(url: string): Promise<T | null> {
+  const db = await connectToDatabase();
+  const doc = await db
+    .collection<CompanyExtractionCache>("company_extractions")
+    .findOne({ url, expiresAt: { $gt: new Date() } });
+  return (doc?.data as T) ?? null;
+}
+
+export async function cacheExtraction(url: string, data: unknown): Promise<void> {
+  const db = await connectToDatabase();
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+  await db.collection<CompanyExtractionCache>("company_extractions").updateOne(
+    { url },
+    {
+      $set: {
+        url,
+        data,
+        extractedAt: new Date(),
         expiresAt,
       },
     },
