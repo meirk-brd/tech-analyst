@@ -6,21 +6,21 @@ import { ChatOpenAI } from "@langchain/openai";
  * Single source of truth for the LLM used by every pipeline stage.
  *
  * We route through OpenRouter's OpenAI-compatible API and request
- * `meta-llama/llama-3.3-70b-instruct`. OpenRouter picks the fastest
- * available provider (typically Groq) — based on live throughput stats
- * this is ~6x faster on p95 latency than the previous `gemini-2.5-flash`,
- * which was the dominant wall-time contributor across the pipeline
- * (extraction's parallel fan-out was bottlenecked on Gemini's slow tail).
+ * `google/gemini-2.5-flash-lite`. OpenRouter live stats put this model at
+ * p95 first-token latency ~1.67s and throughput ~111 tok/s — fastest on
+ * long-output prompts in our workload (Llama 3.3 70B was slower on the
+ * 12-query generation despite better p95 tail, because our prompts ask
+ * for long JSON outputs and the per-token throughput dominates).
  *
  * All call sites use ChatOpenAI's `.invoke([{role,content}])` shape, which
- * matches what the previous ChatGoogleGenerativeAI provided — no prompt
- * changes were needed for the swap.
+ * matches what the original ChatGoogleGenerativeAI provided — no prompt
+ * changes are needed for this swap.
  */
 export interface LlmOptions {
   temperature?: number;
 }
 
-const MODEL = "meta-llama/llama-3.3-70b-instruct";
+const MODEL = "google/gemini-2.5-flash-lite";
 
 export function getLlm(options: LlmOptions = {}): ChatOpenAI {
   const apiKey = process.env.OPENROUTER_API_KEY;
